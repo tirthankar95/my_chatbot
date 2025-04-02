@@ -1,3 +1,4 @@
+import re 
 from chain_base import Chains 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
@@ -5,6 +6,18 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 class Chain_Mongo(Chains):
     def __init__(self):
         super().__init__()
+    
+    def __mongo_exec(self, ai_message):
+        try:
+            print(f'AI mongo query: {ai_message}')
+            return f"The result of the query is: {eval(ai_message)}."
+        except Exception as e:
+            pattern = re.compile(r"\bcollection")
+            if pattern.search(ai_message):
+                return f"Extract only the query from {ai_message}."
+            else:
+                return f"Invalid query. Please try again."
+    
     def prompt(self):
         self.prmpt = ChatPromptTemplate.from_messages(
             [
