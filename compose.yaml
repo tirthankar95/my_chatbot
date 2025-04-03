@@ -1,0 +1,31 @@
+version: "3.8"
+
+services:
+  mongodb:
+    image: mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - db:/data/db
+
+  llm:
+    image: tirthankar95/qwen7b
+    ports:
+      - "8000:8000"
+    command: > 
+      llama-server -m qwen2.5-7b-instruct-q4_0.gguf 
+      --threads -1 --host 0.0.0.0 --port 8000 
+      --log-file chat_llm 
+      --ctx-size 8192 
+      --n-predict 512 
+      --temp 0.5 
+      --top-k 10 
+      --top-p 0.9 
+      --min-p 0.1 
+      --repeat-penalty 1.1 
+      --mlock 
+      --batch-size 16
+    restart: always 
+    
+volumes:
+  db:
