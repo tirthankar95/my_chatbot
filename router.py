@@ -12,9 +12,10 @@ logging.basicConfig(level=logging.INFO,
 dotenv.load_dotenv()
 from typing import List, Dict
 
-
 class ChainRouter():
-    def __init__(self, model_name: str = "qwen2.5-7b-instruct-q4_0.gguf"):
+    def __init__(self, model_name: str = "qwen2.5-7b-instruct-q4_0.gguf", \
+                 embed_model: str = "thenlper/gte-base", embed_model_dir: str = "./embed_model/", \
+                 chroma_db_dir: str = "LLM_MONGO_1") -> None:
         super().__init__()
         self.openai_api_key = os.environ.get("OPENAI_API_KEY")
         self.openai_api_base = "http://localhost:8000/v1"
@@ -22,6 +23,9 @@ class ChainRouter():
         self.init_model()
         self.prompt()
         self.model_name = model_name
+        self.mongo_chain = Chain_Mongo(model_name=self.model_name, embed_model=embed_model, \
+                                      embed_model_dir=embed_model_dir, chroma_db_dir=chroma_db_dir)
+        self.general_chain = Chain_General(model_name=self.model_name)
         self.chain_fn = self.prmpt | self.model | StrOutputParser()
     
     def prompt(self):
@@ -62,11 +66,24 @@ These are the chains you can use:
         try:
             history_to_take = history[-history_sz:]
             history_to_take = [{'role': hist['role'], 'content': hist['content']} for hist in history_to_take]
-            return self.chain_fn.invoke({"query": query, "history": history_to_take})
+            function_calls = self.chain_fn.invoke({"query": query, "history": history_to_take})
+            for function_call in function_calls.split():
+                if function_call == "Chain_Mongo":
+                    logging.info(f'Calling Chain_Mongo with query: {query} and history: {history}')
+                    return self.mongo_chain.call_chain(query, history)
+                elif function_call == "Chain_General":
+                    logging.info(f'Calling Chain_General with query: {query} and history: {history}')
+                    return self.general_chain.call_chain(query, history)
+                else:
+                    logging.error(f'Unknown chain name: {function_call}. Or bad formatting of the output.')
+                    query_new = f"Unknown chain name: {function_call}. Or bad formatting of the output."
+                    return self.call_chain(query_new, history)
         except Exception as e:
             return str(e)
         
 if __name__ == "__main__":
+    import gradio as gr 
     router = ChainRouter()
-    assert router.call_chain("What is the capital of France?", []) == "Chain_General"
-    assert router.call_chain("Count the number of errors with destination as GNB?", []) == "Chain_Mongo"
+    gr.ChatInterface(router.call_chain, type = "messages").launch(share = True)
+    # assert router.call_chain("What is the capital of France?", []) == "Chain_General"
+    # assert router.call_chain("Count the number of errors with destination as GNB?", []) == "Chain_Mongo"

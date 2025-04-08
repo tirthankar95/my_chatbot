@@ -75,9 +75,9 @@ class Chain_Mongo(Chains):
     def __mongo_exec(self, ai_message):
         try:
             logging.info(f'AI mongo query: {ai_message}')
-            return f"The result of the query is: {eval(ai_message)}."
+            return f"""Executing AI mongo query: {ai_message} gives result:\n {eval(ai_message)}."""
         except Exception as e:
-            return f"Executing {ai_message} causes {e}."
+            raise Exception(f"{ai_message} | {e}")
     
     def init_model(self):
         self.model = ChatOpenAI(
@@ -100,7 +100,7 @@ class Chain_Mongo(Chains):
                 ("system", """You are an expert AI assistant specializing in generating efficient and accurate MongoDB queries.""" + \
                    """A database entry is as follows: {schema}.\nHere is an example of mongo query interaction you must follow this assisstant response: {one_shot}.\n""" + \
                    """When returning a query, output only the query itself with no extra words or explanations or punctuations,""" + \
-                   """so that an user can directly run the command."""),
+                   """so that an user can directly run the command. Donot put a fullstop at the end of the query."""),
                    MessagesPlaceholder(variable_name="history"),
                    ("user", "{query}")
             ]
@@ -115,13 +115,22 @@ class Chain_Mongo(Chains):
         Return:
             output (str): The output string from the LLM chain.
         '''
-        history_sz = min(MIN_CHAT_HISTORY, len(history))
-        try:
-            history_to_take = history[-history_sz:]
-            history_to_take = [{'role': hist['role'], 'content': hist['content']} for hist in history_to_take]
-            return self.chain_fn.invoke({"query": query, "history": history_to_take})
-        except Exception as e:
-            return str(e)
+        retry, curr_query = MIN_CHAT_HISTORY, query 
+        while retry:
+            try:
+                return self.chain_fn.invoke({"query": curr_query, "history": history})
+            except Exception as ai_message_error:
+                prev_query = curr_query
+                ai_message, error = str(ai_message_error).split('|')
+                '''
+                Manually adding histories for re-tries. 
+                This won't affect the main history which originates at the router. 
+                '''
+                history.append({"role": "user", "content": f"{prev_query}"})
+                history.append({"role": "assistant", "content": f"{ai_message.strip()}"})
+                curr_query = f"Error: {error.strip()}.\nPlease rephrase your query."
+                retry -= 1
+        return f"Retry limit reached. Query:\n{query}."
     
     def add_one_shots(self):
         examples = [
@@ -144,9 +153,9 @@ class Chain_Mongo(Chains):
             void
         '''
         try:
-            print(eval(query))
+            logging.info(eval(query))
         except Exception as e:
-            print(str(e))
+            logging.info(str(e))
 
 if __name__ == "__main__":
     import gradio as gr 

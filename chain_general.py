@@ -19,8 +19,6 @@ class Chain_General(Chains):
         self.openai_api_key = os.environ.get("OPENAI_API_KEY")
         self.openai_api_base = "http://localhost:8000/v1"
         self.model_name = model_name
-        self.local_dir = embed_model_dir
-        self.repo_id = embed_model
         ## BUILD LangChain 
         self.init_model()
         # Get Prompt.
@@ -53,14 +51,11 @@ class Chain_General(Chains):
         Return:
             output (str): The output string from the LLM chain.
         '''
-        history_sz = min(MIN_CHAT_HISTORY, len(history))
         try:
             logging.info('--' * 50 + '\n')
             logging.info(f'history: {history}\n')
             logging.info(f'query: {query}\n')
-            history_to_take = history[-history_sz:]
-            history_to_take = [{'role': hist['role'], 'content': hist['content']} for hist in history_to_take]
-            return self.chain_fn.invoke({"query": query, "history": history_to_take})
+            return self.chain_fn.invoke({"query": query, "history": history})
         except Exception as e:
             return str(e)
 
