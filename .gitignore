@@ -2,3 +2,5 @@ LLM_MONGO_1
 embed_model
 img
 DOT_Gov
+__pycache__
+.gradio

@@ -1,5 +1,6 @@
 from abc import abstractmethod, ABC 
-
+from typing import List, Dict
+MIN_CHAT_HISTORY = 3
 class Chains(ABC):
     def __init__(self):
         super().__init__()
@@ -7,7 +8,7 @@ class Chains(ABC):
     @abstractmethod
     def prompt(self) -> None:
         '''
-        This function denotes the prompt specific to a langchain
+        This function defines the prompt specific to a langchain.
         Args:
             None
         Return:
@@ -18,11 +19,22 @@ class Chains(ABC):
     @abstractmethod
     def init_model(self) -> None:
         '''
-        This function denotes the LLM models for each langchain
+        This function initializes the LLM models for each langchain.
         Args:
             None
         Return:
             None 
         '''
         pass
-    
+
+    @abstractmethod
+    def call_chain(self, query: str, history: List[Dict]) -> str:
+        '''
+        This function calls the lang chain for a specific child class.
+        Args:
+            query (str): The user query that will be passed to the LLM chain.
+            history List[Dict]: The chat history that will be passed to the LLM chain.
+        Return:
+            output (str): The output string from the LLM chain.
+        '''
+        pass
