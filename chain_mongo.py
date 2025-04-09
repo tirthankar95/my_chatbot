@@ -17,7 +17,10 @@ logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 dotenv.load_dotenv()
 class Chain_Mongo(Chains):
-    """class Chain_Mongo: is used to answer user queries with MongoDB."""
+    """Chain_Mongo class handles user queries related to data retrieval from MongoDB.
+It is specifically designed to interpret and convert user questions into appropriate MongoDB queries.
+Typical queries that involve keywords such as 'count', 'how many', 'errors', or similar fall under this class's scope.
+"""
     def __init__(self, model_name: str = "qwen2.5-7b-instruct-q4_0.gguf", \
                  embed_model: str = "thenlper/gte-base", embed_model_dir: str = "./embed_model/", \
                  chroma_db_dir: str = "LLM_MONGO_1") -> None:

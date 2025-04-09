@@ -84,6 +84,6 @@ These are the chains you can use:
 if __name__ == "__main__":
     import gradio as gr 
     router = ChainRouter()
-    gr.ChatInterface(router.call_chain, type = "messages").launch(share = True)
+    gr.ChatInterface(router.call_chain, type = "messages").launch(share = False)
     # assert router.call_chain("What is the capital of France?", []) == "Chain_General"
     # assert router.call_chain("Count the number of errors with destination as GNB?", []) == "Chain_Mongo"

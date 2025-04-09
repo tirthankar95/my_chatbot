@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO,
 dotenv.load_dotenv()
 
 class Chain_General(Chains):
-    """class Chain_General: is used to answer generic user queries."""
+    """Chain_General class is used to answer generic user queries that can't be answered using other chains."""
     def __init__(self, model_name: str = "qwen2.5-7b-instruct-q4_0.gguf", \
                  embed_model: str = "N/A", embed_model_dir: str = "N/A", \
                  chroma_db_dir: str = "N/A") -> None:
