@@ -25,7 +25,10 @@ services:
       --repeat-penalty 1.1 
       --mlock 
       --batch-size 16
+    profiles: 
+      - llm
     restart: always 
     
+
 volumes:
   db:

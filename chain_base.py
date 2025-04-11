@@ -17,17 +17,6 @@ class Chains(ABC):
         pass 
 
     @abstractmethod
-    def init_model(self) -> None:
-        '''
-        This function initializes the LLM models for each langchain.
-        Args:
-            None
-        Return:
-            None 
-        '''
-        pass
-
-    @abstractmethod
     def call_chain(self, query: str, history: List[Dict]) -> str:
         '''
         This function calls the lang chain for a specific child class.

@@ -1,57 +1,44 @@
 import re 
 from chain_base import Chains, MIN_CHAT_HISTORY
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_openai import ChatOpenAI 
-from langchain_huggingface import HuggingFaceEmbeddings
-from huggingface_hub import hf_hub_download, list_repo_files
 from langchain_core.output_parsers import StrOutputParser
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from pymongo import MongoClient
-import os 
-import dotenv
 from uuid import uuid4
 from typing import List, Dict
 import logging 
-logging.basicConfig(level=logging.INFO, 
-                    format='%(asctime)s - %(levelname)s - %(message)s')
-dotenv.load_dotenv()
+from models import LM_Models
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
+)
 class Chain_Mongo(Chains):
     """Chain_Mongo class handles user queries related to data retrieval from MongoDB.
 It is specifically designed to interpret and convert user questions into appropriate MongoDB queries.
 Typical queries that involve keywords such as 'count', 'how many', 'errors', or similar fall under this class's scope.
 """
-    def __init__(self, model_name: str = "qwen2.5-7b-instruct-q4_0.gguf", \
-                 embed_model: str = "thenlper/gte-base", embed_model_dir: str = "./embed_model/", \
-                 chroma_db_dir: str = "LLM_MONGO_1") -> None:
+    def __init__(self, chroma_db_dir: str = "LLM_MONGO_1") -> None:
         super().__init__()
-        self.openai_api_key = os.environ.get("OPENAI_API_KEY")
-        self.openai_api_base = "http://localhost:8000/v1"
-        self.model_name = model_name
-        self.local_dir = embed_model_dir
-        self.repo_id = embed_model
         ## MongoDB connection
         host, port = "localhost", 27017
         self.client = MongoClient(f"mongodb://{host}:{port}/")
         self._collection = self.client["LLMQueryAgent"]["Functional"]
-        ## BUILD LangChain 
-        self.init_model()
         # Retriever.
+        self.all_lm_models = LM_Models()
         self.chroma_db_dir = chroma_db_dir
         self.vector_store = Chroma(collection_name = "ONE_SHOT_EXAMPLES", \
-                                   embedding_function = self.embed_model, \
+                                   embedding_function = self.all_lm_models.embed_model, \
                                    persist_directory = self.chroma_db_dir)
         self.retriver = self.vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 1})
-        # Get Prompt.
+        ## BUILD LangChain 
         self.prompt()
-        # Build chain.
-        self.chain_fn = self.__vector_retriver | self.prmpt | self.model | \
+        self.chain_fn = self.__vector_retriver | self.prmpt | self.all_lm_models.lm_model | \
                         StrOutputParser() | self.__mongo_exec
 
     @property
     def collection(self):
         return self._collection
-    
     @collection.setter
     def collection(self, value):
         '''
@@ -81,21 +68,6 @@ Typical queries that involve keywords such as 'count', 'how many', 'errors', or 
             return f"""Executing AI mongo query: {ai_message} gives result:\n {eval(ai_message)}."""
         except Exception as e:
             raise Exception(f"{ai_message} | {e}")
-    
-    def init_model(self):
-        self.model = ChatOpenAI(
-            api_key = self.openai_api_key,
-            base_url = self.openai_api_base,
-            model_name = self.model_name
-        )
-        filenames = list_repo_files(self.repo_id)
-        for file in filenames:
-            if not os.path.exists(os.path.join(self.local_dir, file)):
-                hf_hub_download(self.repo_id, file, local_dir = self.local_dir)
-        # Load embedding model.
-        self.embed_model = HuggingFaceEmbeddings(model_name = self.repo_id, \
-                                model_kwargs = {'device': 'cpu'}, \
-                                encode_kwargs = {'normalize_embeddings': True})
 
     def prompt(self):
         self.prmpt = ChatPromptTemplate.from_messages(

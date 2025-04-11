@@ -3,30 +3,22 @@ from chain_mongo import Chain_Mongo
 from chain_general import Chain_General
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
-from langchain_openai import ChatOpenAI
-import os 
-import dotenv
+from models import LM_Models
 import logging 
-logging.basicConfig(level=logging.INFO, 
-                    format='%(asctime)s - %(levelname)s - %(message)s')
-dotenv.load_dotenv()
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
+)
 from typing import List, Dict
 
 class ChainRouter():
-    def __init__(self, model_name: str = "qwen2.5-7b-instruct-q4_0.gguf", \
-                 embed_model: str = "thenlper/gte-base", embed_model_dir: str = "./embed_model/", \
-                 chroma_db_dir: str = "LLM_MONGO_1") -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self.openai_api_key = os.environ.get("OPENAI_API_KEY")
-        self.openai_api_base = "http://localhost:8000/v1"
-        self.model_name = model_name
-        self.init_model()
+        self.all_lm_models = LM_Models()
         self.prompt()
-        self.model_name = model_name
-        self.mongo_chain = Chain_Mongo(model_name=self.model_name, embed_model=embed_model, \
-                                      embed_model_dir=embed_model_dir, chroma_db_dir=chroma_db_dir)
-        self.general_chain = Chain_General(model_name=self.model_name)
-        self.chain_fn = self.prmpt | self.model | StrOutputParser()
+        self.mongo_chain = Chain_Mongo()
+        self.general_chain = Chain_General()
+        self.chain_fn = self.prmpt | self.all_lm_models.lm_model | StrOutputParser()
     
     def prompt(self):
         '''
@@ -44,13 +36,6 @@ These are the chains you can use:
                 MessagesPlaceholder(variable_name="history"),
                 ("user", "{query}")
             ]
-        )
-
-    def init_model(self):
-        self.model = ChatOpenAI(
-            api_key = self.openai_api_key,
-            base_url = self.openai_api_base,
-            model_name = self.model_name
         )
 
     def call_chain(self, query: str, history: List[Dict]) -> str:

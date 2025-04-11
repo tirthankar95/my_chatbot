@@ -4,3 +4,4 @@ img
 DOT_Gov
 __pycache__
 .gradio
+.env

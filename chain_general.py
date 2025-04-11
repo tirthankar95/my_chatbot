@@ -2,36 +2,21 @@ from chain_base import Chains, MIN_CHAT_HISTORY
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI 
 from langchain_core.output_parsers import StrOutputParser
-import os 
-import dotenv
 from typing import List, Dict
 import logging 
-logging.basicConfig(level=logging.INFO, 
-                    format='%(asctime)s - %(levelname)s - %(message)s')
-dotenv.load_dotenv()
-
+from models import LM_Models
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
+)
 class Chain_General(Chains):
     """Chain_General class is used to answer generic user queries that can't be answered using other chains."""
-    def __init__(self, model_name: str = "qwen2.5-7b-instruct-q4_0.gguf", \
-                 embed_model: str = "N/A", embed_model_dir: str = "N/A", \
-                 chroma_db_dir: str = "N/A") -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self.openai_api_key = os.environ.get("OPENAI_API_KEY")
-        self.openai_api_base = "http://localhost:8000/v1"
-        self.model_name = model_name
         ## BUILD LangChain 
-        self.init_model()
-        # Get Prompt.
         self.prompt()
-        # Build chain.
+        self.model = LM_Models().lm_model
         self.chain_fn = self.prmpt | self.model | StrOutputParser() 
-    
-    def init_model(self):
-        self.model = ChatOpenAI(
-            api_key = self.openai_api_key,
-            base_url = self.openai_api_base,
-            model_name = self.model_name
-        )
 
     def prompt(self):
         self.prmpt = ChatPromptTemplate.from_messages(
