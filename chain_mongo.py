@@ -111,7 +111,7 @@ Typical queries that involve keywords such as 'count', 'how many', 'errors', or 
                 chat_session.append({
                         "timestamp": time(),
                         "role": "assistant", 
-                        "content": f"{retry}"
+                        "content": f"{resp.strip()}"
                     })
                 retry = 0
             except Exception as ai_message_error:
