@@ -7,24 +7,29 @@ from langchain_core.documents import Document
 from pymongo import MongoClient
 from uuid import uuid4
 from typing import List, Dict
+from save_chat import Save_Chat
 import logging 
 from models import LM_Models
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
 )
+from time import time 
+
 class Chain_Mongo(Chains):
     """Chain_Mongo class handles user queries related to data retrieval from MongoDB.
 It is specifically designed to interpret and convert user questions into appropriate MongoDB queries.
 Typical queries that involve keywords such as 'count', 'how many', 'errors', or similar fall under this class's scope.
 """
-    def __init__(self, chroma_db_dir: str = "LLM_MONGO_1") -> None:
+    def __init__(self, session_id: str, chroma_db_dir: str = "LLM_MONGO_2") -> None:
         super().__init__()
+        ## Get Chat Object
+        self.chat_obj = Save_Chat(collection_name = session_id)
         ## MongoDB connection
         host, port = "localhost", 27017
         self.client = MongoClient(f"mongodb://{host}:{port}/")
         self._collection = self.client["LLMQueryAgent"]["Functional"]
-        # Retriever.
+        ## Retriever.
         self.all_lm_models = LM_Models()
         self.chroma_db_dir = chroma_db_dir
         self.vector_store = Chroma(collection_name = "ONE_SHOT_EXAMPLES", \
@@ -53,7 +58,6 @@ Typical queries that involve keywords such as 'count', 'how many', 'errors', or 
         rdocs = self.retriver.invoke(query)
         fmt_docx = "\n".join([doc.page_content for doc in rdocs])
         # Print LLM input. 
-        logging.info('--' * 50 + '\n')
         logging.info(f'one_shot: {fmt_docx}\n')
         logging.info(f'history: {history}\n')
         logging.info(f'query: {query}\n')
@@ -67,6 +71,7 @@ Typical queries that involve keywords such as 'count', 'how many', 'errors', or 
             logging.info(f'AI mongo query: {ai_message}')
             return f"""Executing AI mongo query: {ai_message} gives result:\n {eval(ai_message)}."""
         except Exception as e:
+            logging.error(f"Error in executing mongo query: {ai_message} | {e}")
             raise Exception(f"{ai_message} | {e}")
 
     def prompt(self):
@@ -90,22 +95,42 @@ Typical queries that involve keywords such as 'count', 'how many', 'errors', or 
         Return:
             output (str): The output string from the LLM chain.
         '''
-        retry, curr_query = MIN_CHAT_HISTORY, query 
+        logging.info('-m' * 30 + '\n')
+        retry = MIN_CHAT_HISTORY
+        chat_session, resp = [], f"Retry limit exceeded."
         while retry:
             try:
-                return self.chain_fn.invoke({"query": curr_query, "history": history})
+                history.append({"role": "user", "content": f"{query}"})
+                chat_session.append({
+                        "timestamp": time(),
+                        "role": "user", 
+                        "content": query, 
+                        "content_train": self.prmpt.invoke(self.__vector_retriver({"query": query, "history": history})).to_string()
+                    })
+                resp = self.chain_fn.invoke({"query": query, "history": history})
+                chat_session.append({
+                        "timestamp": time(),
+                        "role": "assistant", 
+                        "content": f"{retry}"
+                    })
+                retry = 0
             except Exception as ai_message_error:
-                prev_query = curr_query
                 ai_message, error = str(ai_message_error).split('|')
                 '''
                 Manually adding histories for re-tries. 
                 This won't affect the main history which originates at the router. 
                 '''
-                history.append({"role": "user", "content": f"{prev_query}"})
                 history.append({"role": "assistant", "content": f"{ai_message.strip()}"})
-                curr_query = f"Error: {error.strip()}.\nPlease rephrase your query."
+                chat_session.append({
+                        "timestamp": time(),
+                        "role": "assistant", 
+                        "content": f"{ai_message.strip()}"
+                    })
+                query = f"Error: {error.strip()}.\nPlease rephrase your query."
                 retry -= 1
-        return f"Retry limit reached. Query:\n{query}."
+        logging.info(f'Chat Insertion: Mongo')
+        self.chat_obj.insert(chat_session)
+        return resp
     
     def add_one_shots(self):
         examples = [
@@ -134,7 +159,7 @@ Typical queries that involve keywords such as 'count', 'how many', 'errors', or 
 
 if __name__ == "__main__":
     import gradio as gr 
-    mongo_chain = Chain_Mongo()
+    mongo_chain = Chain_Mongo(session_id="OneShot")
     mongo_chain.add_one_shots()
     gr.ChatInterface(mongo_chain.call_chain, type = "messages").launch(share = False)
     # Query 1: Count the number of errors with destination as GNB?

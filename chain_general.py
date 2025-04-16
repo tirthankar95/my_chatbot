@@ -3,16 +3,20 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI 
 from langchain_core.output_parsers import StrOutputParser
 from typing import List, Dict
+from save_chat import Save_Chat
 import logging 
 from models import LM_Models
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
 )
+from time import time 
 class Chain_General(Chains):
     """Chain_General class is used to answer generic user queries that can't be answered using other chains."""
-    def __init__(self) -> None:
+    def __init__(self, session_id: str) -> None:
         super().__init__()
+        ## Get Chat Object
+        self.chat_obj = Save_Chat(collection_name = session_id)
         ## BUILD LangChain 
         self.prompt()
         self.model = LM_Models().lm_model
@@ -36,13 +40,29 @@ class Chain_General(Chains):
         Return:
             output (str): The output string from the LLM chain.
         '''
+        chat_session, resp = [], ""
         try:
-            logging.info('--' * 50 + '\n')
+            logging.info('-g' * 30 + '\n')
             logging.info(f'history: {history}\n')
             logging.info(f'query: {query}\n')
-            return self.chain_fn.invoke({"query": query, "history": history})
+            chat_session.append({
+                "timestamp": time(),
+                "role": "user", 
+                "content": query, 
+                "content_train": self.prmpt.invoke({"query": query, "history": history}).to_string()
+            })
+            resp = self.chain_fn.invoke({"query": query, "history": history})
         except Exception as e:
-            return str(e)
+            resp = str(e)
+        finally:
+            chat_session.append({
+                "timestamp": time(),
+                "role": "assistant", 
+                "content": resp
+            })
+            logging.info(f'Chat Insertion: General')
+            self.chat_obj.insert(chat_session)
+            return resp
 
 if __name__ == "__main__":
     import gradio as gr 

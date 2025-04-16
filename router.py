@@ -3,6 +3,7 @@ from chain_mongo import Chain_Mongo
 from chain_general import Chain_General
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
+from uuid import uuid4
 from models import LM_Models
 import logging 
 logging.basicConfig(
@@ -10,16 +11,24 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
 )
 from typing import List, Dict
+from time import time 
+from save_chat import Save_Chat
 
 class ChainRouter():
     def __init__(self) -> None:
         super().__init__()
+        ## Save Chat
+        self.session_id = uuid4().hex[:16]
+        self.chat_obj = Save_Chat(collection_name = self.session_id)
+        ## Init LM models & prompt
         self.all_lm_models = LM_Models()
         self.prompt()
-        self.mongo_chain = Chain_Mongo()
-        self.general_chain = Chain_General()
+        ## Init Chains
+        self.mongo_chain = Chain_Mongo(session_id = self.session_id)
+        self.general_chain = Chain_General(session_id = self.session_id)
         self.chain_fn = self.prmpt | self.all_lm_models.lm_model | StrOutputParser()
-    
+
+
     def prompt(self):
         '''
         Prompt for the LLM.
@@ -47,24 +56,53 @@ These are the chains you can use:
         Return:
             output (str): The output string from the LLM chain.
         '''
+        logging.info('-r' * 30 + '\n')
         history_sz = min(MIN_CHAT_HISTORY, len(history))
+        chat_session, resp, retry = [], "", 2
+        function_calls = []
         try:
             history_to_take = history[-history_sz:]
             history_to_take = [{'role': hist['role'], 'content': hist['content']} for hist in history_to_take]
-            function_calls = self.chain_fn.invoke({"query": query, "history": history_to_take})
+            query_planner = query
+            ## Validate if the name of the function is correct. ##
+            while retry > 0:
+                function_calls = self.chain_fn.invoke({"query": query_planner, "history": history_to_take})
+                query_planner = ""
+                for function_call in function_calls.split():
+                    if function_call not in ["Chain_Mongo", "Chain_General"]:
+                        logging.error(f'Unknown chain name: {function_call} or bad formatting of the output with ' + \
+                                    f'query: {query} and history: {history}')
+                        query_planner += f"Unknown chain name: {function_call} or bad formatting of the output."
+                if len(query_planner) == 0: break                
+                retry -= 1
+            ## Insert planner query-response from LLM.
+            chat_session.extend([
+                {
+                    "timestamp": time(),
+                    "role": "user", 
+                    "content": query, 
+                    "content_train": self.prmpt.invoke({"query": query, "history": history_to_take}).to_string()
+                },
+                {
+                    "timestamp": time(),
+                    "role": "assistant",
+                    "content": function_calls,
+                }])
             for function_call in function_calls.split():
                 if function_call == "Chain_Mongo":
                     logging.info(f'Calling Chain_Mongo with query: {query} and history: {history}')
-                    return self.mongo_chain.call_chain(query, history)
+                    # Each mongo query session is independent, so no need to pass the history in the session.
+                    resp = self.mongo_chain.call_chain(query, [])
                 elif function_call == "Chain_General":
                     logging.info(f'Calling Chain_General with query: {query} and history: {history}')
-                    return self.general_chain.call_chain(query, history)
-                else:
-                    logging.error(f'Unknown chain name: {function_call}. Or bad formatting of the output.')
-                    query_new = f"Unknown chain name: {function_call}. Or bad formatting of the output."
-                    return self.call_chain(query_new, history)
+                    resp = self.general_chain.call_chain(query, history)
         except Exception as e:
-            return str(e)
+            resp = str(e)
+        finally:
+            logging.info(f'Chat Insertion: Router')
+            self.chat_obj.insert(chat_session)
+            return resp
+            
         
 if __name__ == "__main__":
     import gradio as gr 
