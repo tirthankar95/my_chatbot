@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MockDataTraversal</title>
+</head>
+<body>
+    <div id="form-container"></div>
+    <script>
+        const form = document.createElement('form');
+        form.setAttribute('id', 'myForm');
+        // Create an input field
+        const input = document.createElement('input');
+        input.setAttribute('type', 'text');
+        input.setAttribute('name', 'Query');
+        input.setAttribute('placeholder', 'What do you want to know?');
+        // Create a submit button
+        const submitButton = document.createElement('button');
+        submitButton.setAttribute('type', 'submit');
+        submitButton.textContent = 'Submit';
+        // Append the input and button to the form
+        form.appendChild(input);
+        form.appendChild(submitButton);
+        document.getElementById('form-container').appendChild(form);
+        // Handle form submission
+        form.addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent default form submission
+            const query = input.value;
+            fetch("http://localhost:8000/query/",{
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({query: query}),
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Q: ',data['uuid']);
+                const eventSource = new EventSource("http://localhost:8000/sse/"+data['uuid']);
+                eventSource.onmessage = function(event) {
+                    const p = document.createElement("span");
+                    // if (event.data === "[END]") {
+                    //     eventSource.close();
+                    //     return;
+                    // }
+                    p.textContent = event.data + " ";
+                    document.body.appendChild(p);
+                };
+            })
+            .catch((error) => {
+                console.log('Error: ', error);
+                alert('Error!!');
+            })
+        });
+    
+
+
+    </script>
+</body>
+</html>
