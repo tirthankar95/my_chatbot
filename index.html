@@ -39,10 +39,10 @@
                 const eventSource = new EventSource("http://localhost:8000/sse/"+data['uuid']);
                 eventSource.onmessage = function(event) {
                     const p = document.createElement("span");
-                    // if (event.data === "[END]") {
-                    //     eventSource.close();
-                    //     return;
-                    // }
+                    if (event.data === "[DONE]") {
+                        eventSource.close();
+                        return;
+                    }
                     p.textContent = event.data + " ";
                     document.body.appendChild(p);
                 };
