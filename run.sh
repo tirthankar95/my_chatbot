@@ -1,3 +1,3 @@
 #!/bin/bash
 docker compose up -d 
-uvicorn SSE:app --port 8989
+uvicorn sse:app --host 0.0.0.0 --port 8989

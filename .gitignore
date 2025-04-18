@@ -5,3 +5,4 @@ DOT_Gov
 __pycache__
 .gradio
 .env
+vector_chunks.txt
