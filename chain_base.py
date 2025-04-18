@@ -1,6 +1,6 @@
 from abc import abstractmethod, ABC 
 from typing import List, Dict
-MIN_CHAT_HISTORY = 10
+MIN_CHAT_HISTORY = 5
 class Chains(ABC):
     def __init__(self):
         super().__init__()

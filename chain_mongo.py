@@ -14,7 +14,6 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
 )
-from time import time 
 
 class Chain_Mongo(Chains):
     """Chain_Mongo class handles user queries related to data retrieval from MongoDB.
@@ -97,22 +96,17 @@ Typical queries that involve keywords such as 'count', 'how many', 'errors', or 
         '''
         logging.info('-m' * 30 + '\n')
         retry = MIN_CHAT_HISTORY
-        chat_session, resp = [], f"Retry limit exceeded."
+        resp = f"Retry limit exceeded."
         while retry:
+            history_to_take = history[-min(MIN_CHAT_HISTORY, len(history)):]
             try:
-                history.append({"role": "user", "content": f"{query}"})
-                chat_session.append({
-                        "timestamp": time(),
-                        "role": "user", 
-                        "content": query, 
-                        "content_train": self.prmpt.invoke(self.__vector_retriver({"query": query, "history": history})).to_string()
+                history.append({
+                    "role": "user", 
+                    "content": self.prmpt.invoke(self.__vector_retriver({"query": query, 
+                                                                         "history": history_to_take})).to_string()
                     })
-                resp = self.chain_fn.invoke({"query": query, "history": history})
-                chat_session.append({
-                        "timestamp": time(),
-                        "role": "assistant", 
-                        "content": f"{resp.strip()}"
-                    })
+                self.chat_obj.insert(history[-1])
+                resp = self.chain_fn.invoke({"query": query, "history": history_to_take})
                 retry = 0
             except Exception as ai_message_error:
                 ai_message, error = str(ai_message_error).split('|')
@@ -120,16 +114,18 @@ Typical queries that involve keywords such as 'count', 'how many', 'errors', or 
                 Manually adding histories for re-tries. 
                 This won't affect the main history which originates at the router. 
                 '''
-                history.append({"role": "assistant", "content": f"{ai_message.strip()}"})
-                chat_session.append({
-                        "timestamp": time(),
-                        "role": "assistant", 
-                        "content": f"{ai_message.strip()}"
+                history.append({
+                    "role": "assistant", 
+                    "content": f"{ai_message.strip()}"
                     })
+                self.chat_obj.insert(history[-1])
                 query = f"Error: {error.strip()}.\nPlease rephrase your query."
                 retry -= 1
-        logging.info(f'Chat Insertion: Mongo')
-        self.chat_obj.insert(chat_session)
+        history.append({
+                "role": "assistant", 
+                "content": f"{resp.strip()}"
+            })
+        self.chat_obj.insert(history[-1])
         return resp
     
     def add_one_shots(self):

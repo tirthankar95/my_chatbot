@@ -40,29 +40,24 @@ class Chain_General(Chains):
         Return:
             output (str): The output string from the LLM chain.
         '''
-        chat_session, resp = [], ""
-        try:
-            logging.info('-g' * 30 + '\n')
-            logging.info(f'history: {history}\n')
-            logging.info(f'query: {query}\n')
-            chat_session.append({
-                "timestamp": time(),
+        resp = ""
+        history_to_take = history[-min(MIN_CHAT_HISTORY, len(history)):]
+        logging.info('-g' * 30 + '\n')
+        logging.info(f'history: {history_to_take}\n')
+        logging.info(f'query: {query}\n')
+        resp = self.chain_fn.invoke({"query": query, "history": history_to_take})
+        history.append([
+            {
                 "role": "user", 
-                "content": query, 
-                "content_train": self.prmpt.invoke({"query": query, "history": history}).to_string()
-            })
-            resp = self.chain_fn.invoke({"query": query, "history": history})
-        except Exception as e:
-            resp = str(e)
-        finally:
-            chat_session.append({
-                "timestamp": time(),
+                "content": self.prmpt.invoke({"query": query, "history": history_to_take}).to_string()
+            },
+            {
                 "role": "assistant", 
                 "content": resp
-            })
-            logging.info(f'Chat Insertion: General')
-            self.chat_obj.insert(chat_session)
-            return resp
+            }
+        ])
+        self.chat_obj.insert_many(history[-2:])
+        return resp
 
 if __name__ == "__main__":
     import gradio as gr 

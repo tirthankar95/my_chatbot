@@ -56,11 +56,10 @@ These are the chains you can use:
             output (str): The output string from the LLM chain.
         '''
         logging.info('-r' * 30 + '\n')
-        history_sz = min(MIN_CHAT_HISTORY, len(self.history))
-        chat_session, resp, retry = [], "", 2
+        resp, retry = "", 2
         function_calls = []
         # Start planning chain.
-        history_to_take = self.history[-history_sz:]
+        history_to_take = self.history[-min(MIN_CHAT_HISTORY, len(self.history)):]
         query_planner = query
         ## Validate if the name of the function is correct.
         while retry > 0:
@@ -77,34 +76,22 @@ These are the chains you can use:
         self.history.extend([
             {                
                 'role': 'user',
-                'content': query
+                'content': self.prmpt.invoke({"query": query, "history": history_to_take}).to_string()
             },
             {
                 'role': 'assistant',
                 'content': function_calls
             }])
-        chat_session.extend([
-            {
-                "timestamp": time(),
-                "role": "user", 
-                "content": query, 
-                "content_train": self.prmpt.invoke({"query": query, "history": history_to_take}).to_string()
-            },
-            {
-                "timestamp": time(),
-                "role": "assistant",
-                "content": function_calls,
-            }])
+        logging.info(f'Chat Insertion: Router')
+        self.chat_obj.insert_many(self.history[-2:])
         for function_call in function_calls.split():
             if function_call == "Chain_Mongo":
                 logging.info(f'Calling Chain_Mongo with query: {query} and history: {self.history}')
                 # Each mongo query session is independent, so no need to pass the history in the session.
-                resp = self.mongo_chain.call_chain(query, [])
+                resp = self.mongo_chain.call_chain(query, self.history)
             elif function_call == "Chain_General":
                 logging.info(f'Calling Chain_General with query: {query} and history: {self.history}')
                 resp = self.general_chain.call_chain(query, self.history)
-        logging.info(f'Chat Insertion: Router')
-        self.chat_obj.insert(chat_session)
         return resp
         
     def call_chain_gr(self, query: str, history: List[Dict]) -> str:
