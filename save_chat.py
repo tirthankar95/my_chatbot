@@ -1,6 +1,7 @@
 import logging 
 from pymongo import MongoClient 
 from time import time 
+from copy import deepcopy
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
@@ -17,7 +18,7 @@ class Save_Chat():
         hist_copy["timestamp"] = time()
         self.collection.insert_one(hist_copy)
     def insert_many(self, history):
-        hist_copy = history.copy()
+        hist_copy = deepcopy(history)
         for convo in hist_copy:
             convo["timestamp"] = time()
         self.collection.insert_many(hist_copy)

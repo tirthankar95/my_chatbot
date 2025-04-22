@@ -36,10 +36,11 @@ class LM_Models():
         # EMBED MODEL
         self.local_dir = embed_model_dir
         self.repo_id = embed_model
-        filenames = list_repo_files(self.repo_id)
-        for file in filenames:
-            if not os.path.exists(os.path.join(self.local_dir, file)):
-                hf_hub_download(self.repo_id, file, local_dir = self.local_dir)
+        if not os.path.exists(self.local_dir):
+            filenames = list_repo_files(self.repo_id)
+            for file in filenames:
+                if not os.path.exists(os.path.join(self.local_dir, file)):
+                    hf_hub_download(self.repo_id, file, local_dir = self.local_dir)
         self.embed_model = HuggingFaceEmbeddings(model_name = self.repo_id, \
                                                  model_kwargs = {'device': 'cpu'}, \
                                                  encode_kwargs = {'normalize_embeddings': True})

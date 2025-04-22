@@ -46,7 +46,7 @@ class Chain_General(Chains):
         logging.info(f'history: {history_to_take}\n')
         logging.info(f'query: {query}\n')
         resp = self.chain_fn.invoke({"query": query, "history": history_to_take})
-        history.append([
+        history.extend([
             {
                 "role": "user", 
                 "content": self.prmpt.invoke({"query": query, "history": history_to_take}).to_string()

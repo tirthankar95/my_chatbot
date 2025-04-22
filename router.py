@@ -20,6 +20,7 @@ class ChainRouter():
         ## Save Chat
         self.session_id = uuid4().hex[:16]
         self.chat_obj = Save_Chat(collection_name = self.session_id)
+        self.chat_obj_hidden = Save_Chat(collection_name = '[Train]')
         ## Init LM models & prompt
         self.all_lm_models = LM_Models()
         self.prompt()
@@ -27,7 +28,7 @@ class ChainRouter():
         self.mongo_chain = Chain_Mongo(session_id = self.session_id)
         self.general_chain = Chain_General(session_id = self.session_id)
         self.chain_fn = self.prmpt | self.all_lm_models.lm_model | StrOutputParser()
-        self.history = []
+        self.history, self.hidden_history = [], []
 
     def prompt(self):
         '''
@@ -35,8 +36,7 @@ class ChainRouter():
         '''
         self.prmpt = ChatPromptTemplate.from_messages(
             [
-                ("system", f"""
-You are a planner responsible for determining which chains to invoke in order to solve a user's query.
+                ("system", f"""You are a planner responsible for determining which chains to invoke in order to solve a user's query.
 You are not allowed output anything else other than the chain names and the sequence in which they should be invoked.
 These are the chains you can use:
 1. {Chain_Mongo.__doc__}
@@ -58,40 +58,58 @@ These are the chains you can use:
         logging.info('-r' * 30 + '\n')
         resp, retry = "", 2
         function_calls = []
-        # Start planning chain.
-        history_to_take = self.history[-min(MIN_CHAT_HISTORY, len(self.history)):]
+        
+        ## Start planning and verify plan. 
+        history_to_take = self.hidden_history[-min(MIN_CHAT_HISTORY, len(self.hidden_history)):]
         query_planner = query
-        ## Validate if the name of the function is correct.
         while retry > 0:
             function_calls = self.chain_fn.invoke({"query": query_planner, "history": history_to_take})
             query_planner = ""
             for function_call in function_calls.split():
                 if function_call not in ["Chain_Mongo", "Chain_General"]:
                     logging.error(f'Unknown chain name: {function_call} or bad formatting of the output with ' + \
-                                f'query: {query} and history: {self.history}')
+                                f'query: {query} and history: {history_to_take}')
                     query_planner += f"Unknown chain name: {function_call} or bad formatting of the output."
             if len(query_planner) == 0: break                
             retry -= 1
-        ## Insert planner query-response from LLM.
-        self.history.extend([
+        
+        ## Insert data for future fine-tuning.
+        self.hidden_history.extend([
             {                
                 'role': 'user',
-                'content': self.prmpt.invoke({"query": query, "history": history_to_take}).to_string()
+                'content': query
             },
             {
                 'role': 'assistant',
                 'content': function_calls
             }])
-        logging.info(f'Chat Insertion: Router')
-        self.chat_obj.insert_many(self.history[-2:])
+        self.chat_obj_hidden.insert_many(self.hidden_history[-2:])
+
         for function_call in function_calls.split():
             if function_call == "Chain_Mongo":
-                logging.info(f'Calling Chain_Mongo with query: {query} and history: {self.history}')
+                logging.info(f'Calling Chain_Mongo with query: {query}')
                 # Each mongo query session is independent, so no need to pass the history in the session.
-                resp = self.mongo_chain.call_chain(query, self.history)
+                resp = self.mongo_chain.call_chain(query, self.hidden_history)
             elif function_call == "Chain_General":
-                logging.info(f'Calling Chain_General with query: {query} and history: {self.history}')
-                resp = self.general_chain.call_chain(query, self.history)
+                logging.info(f'Calling Chain_General with query: {query}')
+                resp = self.general_chain.call_chain(query, self.hidden_history)
+        
+        ## Insert planner query-response from LLM.
+        tt = time()
+        self.history.extend([
+            {
+                'timestamp': tt,       
+                'role': 'user',
+                'content': query
+            },
+            {
+                'timestamp': tt,
+                'role': 'assistant',
+                'content': resp
+            }])
+        logging.info(f'Chat Insertion: Router')
+        self.chat_obj.insert_many(self.history[-2:])
+
         return resp
         
     def call_chain_gr(self, query: str, history: List[Dict]) -> str:
@@ -154,6 +172,11 @@ These are the chains you can use:
 if __name__ == "__main__":
     import gradio as gr 
     router = ChainRouter()
-    gr.ChatInterface(router.call_chain_gr, type = "messages").launch(share = False)
+    # router.call_chain("What is the capital of France?")
+    # gr.ChatInterface(router.call_chain_gr, type = "messages").launch(share = False)
     # assert router.call_chain("What is the capital of France?", []) == "Chain_General"
     # assert router.call_chain("Count the number of errors with destination as GNB?", []) == "Chain_Mongo"
+    print(router.prmpt.invoke({
+        "query": "Count the number of errors with destination as GNB?", 
+        "history": []
+        }).to_dict())
