@@ -19,7 +19,13 @@ class Save_Chat():
         self.collection.insert_one(hist_copy)
     def insert_many(self, history):
         hist_copy = deepcopy(history)
+        tt = time()
         for convo in hist_copy:
-            convo["timestamp"] = time()
+            convo["timestamp"] = tt
         self.collection.insert_many(hist_copy)
+    def insert_serialize(self, interactions):
+        final_chat = ""
+        for element in interactions:
+            final_chat += element["role"] + ": " + element["content"] + "\n" 
+        self.collection.insert_one({"chat": final_chat, "timestamp": time()})
         

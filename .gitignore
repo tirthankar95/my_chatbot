@@ -7,3 +7,4 @@ __pycache__
 .env
 vector_chunks.txt
 index_vm.html
+utils.py
